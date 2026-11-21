@@ -197,6 +197,13 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .bars { display: grid; gap: 10px; }
 
+.bar-caption {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
 .bar-row {
   display: grid;
   grid-template-columns: 132px 1fr 56px;
@@ -230,6 +237,23 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
   text-align: right;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+.cal-result {
+  border-color: rgba(124, 199, 255, 0.35);
+}
+
+.cal-meta {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cal-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .meta {

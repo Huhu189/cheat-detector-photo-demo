@@ -1,6 +1,9 @@
 import { FilesetResolver, ImageClassifier } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+import { parseCustomCalibration } from './lib/calibration.js'
+import { detectCalibrated } from './lib/pipeline.js'
 
-const MODEL_URL = './cheat-detector.tflite?v=1'
+const MODEL_URL = './cheat-detector.tflite?v=2'
+const CALIBRATION_URL = './cheat-detector-calibration.bin?v=2'
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const LABELS = ['hp', 'buku', 'layar', 'tulisan_tangan', 'tidak_dikenali']
 const LABEL_ID = {
@@ -20,16 +23,31 @@ const analyzeButton = document.getElementById('analyzeButton')
 const statusEl = document.getElementById('status')
 const errorEl = document.getElementById('error')
 const resultEl = document.getElementById('result')
+const calResultEl = document.getElementById('calResult')
 const topLabelEl = document.getElementById('topLabel')
 const topScoreEl = document.getElementById('topScore')
+const calLabelEl = document.getElementById('calLabel')
+const calScoreEl = document.getElementById('calScore')
+const calMetaEl = document.getElementById('calMeta')
+const calNoteEl = document.getElementById('calNote')
 const barsEl = document.getElementById('bars')
 const latencyEl = document.getElementById('latency')
 const modelStateEl = document.getElementById('modelState')
 
 let selectedFile = null
-let classifierPromise = null
+let resourcesPromise = null
 let previewUrl = null
 let busy = false
+let calibrationBytes = 0
+let prototypeCount = 0
+
+window.__demo = {
+  ready: false,
+  calibrationBytes: 0,
+  prototypes: 0,
+  crops: 0,
+  last: null,
+}
 
 function setStatus(text) {
   statusEl.textContent = text
@@ -49,11 +67,20 @@ function formatLabel(name) {
   return LABEL_ID[name] || name
 }
 
-async function getClassifier() {
-  if (!classifierPromise) {
-    modelStateEl.textContent = 'Memuat model…'
-    classifierPromise = (async () => {
+async function getResources() {
+  if (!resourcesPromise) {
+    modelStateEl.textContent = 'Memuat model + kalibrasi…'
+    resourcesPromise = (async () => {
       const vision = await FilesetResolver.forVisionTasks(WASM_URL)
+      const calibrationResponse = await fetch(CALIBRATION_URL, { cache: 'no-cache' })
+      if (!calibrationResponse.ok) {
+        throw new Error(`Kalibrasi gagal dimuat (${calibrationResponse.status}).`)
+      }
+      const calibrationBuffer = await calibrationResponse.arrayBuffer()
+      const calibration = parseCustomCalibration(calibrationBuffer)
+      calibrationBytes = calibrationBuffer.byteLength
+      prototypeCount = calibration._prototypes?.length || 0
+
       const classifier = await ImageClassifier.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath: MODEL_URL,
@@ -63,15 +90,19 @@ async function getClassifier() {
         maxResults: 5,
         scoreThreshold: 0.01,
       })
-      modelStateEl.textContent = 'Model siap'
-      return classifier
+
+      window.__demo.ready = true
+      window.__demo.calibrationBytes = calibrationBytes
+      window.__demo.prototypes = prototypeCount
+      modelStateEl.textContent = `Model + kalibrasi siap · ${prototypeCount.toLocaleString('id-ID')} prototipe`
+      return { classifier, calibration }
     })().catch(error => {
-      classifierPromise = null
-      modelStateEl.textContent = 'Model gagal dimuat'
+      resourcesPromise = null
+      modelStateEl.textContent = 'Model/kalibrasi gagal dimuat'
       throw error
     })
   }
-  return classifierPromise
+  return resourcesPromise
 }
 
 function loadFile(file) {
@@ -89,6 +120,7 @@ function loadFile(file) {
   dropzone.hidden = true
   analyzeButton.disabled = false
   resultEl.hidden = true
+  calResultEl.hidden = true
   setStatus('Foto siap dianalisis.')
 }
 
@@ -101,6 +133,7 @@ function resetFile() {
   dropzone.hidden = false
   analyzeButton.disabled = true
   resultEl.hidden = true
+  calResultEl.hidden = true
   clearError()
   setStatus('Menunggu foto…')
   fileInput.value = ''
@@ -116,20 +149,41 @@ function drawInput(image) {
   return canvas
 }
 
-function renderResult(categories, elapsedMs) {
-  const sorted = LABELS.map((label, index) => {
+function sortedCategories(categories) {
+  return LABELS.map((label, index) => {
     const found = categories.find(item => Number(item.index) === index)
     return { label, score: Number(found?.score || 0) }
   }).sort((a, b) => b.score - a.score)
+}
 
-  const top = sorted[0]
-  topLabelEl.textContent = formatLabel(top.label)
-  topScoreEl.textContent = `${(top.score * 100).toFixed(1)}%`
-  latencyEl.textContent = `Inferensi ${Math.round(elapsedMs)} ms`
+function renderResult(best, rawSorted, elapsedMs, crops) {
+  const topRaw = rawSorted[0]
+  const decision = best
+    ? { label: best.label, score: best.score, rawScore: best.rawScore, crop: best.crop }
+    : { label: 'tidak_dikenali', score: null, rawScore: 0, crop: 'gate' }
 
-  barsEl.replaceChildren(...sorted.map((item, index) => {
+  topLabelEl.textContent = formatLabel(topRaw.label)
+  topScoreEl.textContent = `${(topRaw.score * 100).toFixed(1)}%`
+  latencyEl.textContent = `Full-frame · ${Math.round(elapsedMs)} ms total`
+
+  calLabelEl.textContent = formatLabel(decision.label)
+  calScoreEl.textContent = decision.score === null
+    ? '—'
+    : `${(decision.score * 100).toFixed(1)}%`
+  calMetaEl.textContent = best
+    ? `Menang di ${best.crop} · ${crops} crop · skor kalibrasi ${(best.score * 100).toFixed(1)}%`
+    : `Tidak ada objek lolos gate · ${crops} crop`
+  calNoteEl.textContent = best
+    ? `Bin memilih ${formatLabel(decision.label)}; ini hasil gate, bukan jaminan benar.`
+    : 'Semua kandidat ditolak gate; hasil bin dianggap tidak dikenali.'
+
+  const topRow = document.createElement('div')
+  topRow.className = 'bar-caption'
+  topRow.textContent = `Distribusi skor mentah full-frame: ${formatLabel(topRaw.label)} ${(topRaw.score * 100).toFixed(1)}%`
+
+  barsEl.replaceChildren(topRow, ...rawSorted.map(item => {
     const row = document.createElement('div')
-    row.className = `bar-row${index === 0 ? ' top' : ''}`
+    row.className = `bar-row${item.label === topRaw.label ? ' top' : ''}`
 
     const name = document.createElement('span')
     name.className = 'bar-name'
@@ -150,7 +204,16 @@ function renderResult(categories, elapsedMs) {
     return row
   }))
 
+  window.__demo.last = {
+    rawLabel: topRaw.label,
+    rawScore: topRaw.score,
+    calLabel: decision.label,
+    calScore: decision.score,
+    crop: decision.crop,
+    crops,
+  }
   resultEl.hidden = false
+  calResultEl.hidden = false
 }
 
 async function analyze() {
@@ -159,10 +222,10 @@ async function analyze() {
   busy = true
   analyzeButton.disabled = true
   clearError()
-  setStatus('Memuat model dan menganalisis…')
+  setStatus('Memuat model + kalibrasi…')
 
   try {
-    const classifier = await getClassifier()
+    const { classifier, calibration } = await getResources()
     const image = await new Promise((resolve, reject) => {
       const element = new Image()
       element.onload = () => resolve(element)
@@ -170,15 +233,25 @@ async function analyze() {
       element.src = previewUrl
     })
 
-    const input = drawInput(image)
+    setStatus('Menjalankan crop ensemble + kalibrasi…')
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+
     const started = performance.now()
-    const result = await classifier.classify(input)
+    const calibrated = detectCalibrated(image, classifier, calibration)
+    const best = calibrated.found?.[0] || null
+
+    const rawInput = drawInput(image)
+    const rawResult = await classifier.classify(rawInput)
+    const rawCategories = rawResult?.classifications?.[0]?.categories || []
+    if (!rawCategories.length) throw new Error('Model tidak mengembalikan prediksi.')
     const elapsed = performance.now() - started
 
-    const categories = result?.classifications?.[0]?.categories || []
-    if (!categories.length) throw new Error('Model tidak mengembalikan prediksi.')
-    renderResult(categories, elapsed)
-    setStatus('Selesai. Ini prediksi model mentah, bukan keputusan final.')
+    const crops = calibrated.crops || 0
+    window.__demo.crops = crops
+    renderResult(best, sortedCategories(rawCategories), elapsed, crops)
+    setStatus(best
+      ? 'Selesai. Hasil mentah dan hasil dengan bin ditampilkan terpisah.'
+      : 'Selesai. Bin menolak semua kandidat; hasil kalibrasi dianggap aman.')
   } catch (error) {
     console.error(error)
     showError(`Gagal menganalisis foto: ${error?.message || error}`)

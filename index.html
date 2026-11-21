@@ -11,7 +11,7 @@
 <body>
   <main class="shell">
     <header class="hero">
-      <div class="eyebrow">PHOTO DEMO · MODEL MENTAH</div>
+      <div class="eyebrow">PHOTO DEMO · MENTAH + BIN</div>
       <h1>Cheat Detector</h1>
       <p class="lede">
         Upload satu foto. Model akan menebak apakah foto berisi
@@ -19,8 +19,11 @@
         <strong>tulisan tangan</strong>, atau <strong>tidak dikenali</strong>.
       </p>
       <div class="notice">
-        Ini demo model saja, bukan pipeline produksi. Frontend asli memakai
-        banyak crop + kalibrasi; hasil di sini bisa berbeda.
+        Demo menampilkan <strong>dua hasil</strong>: model mentah full-frame dan
+        keputusan dengan <code>cheat-detector-calibration.bin</code>. Pada 100
+        foto internet, model mentah <strong>58%</strong> dan hasil dengan bin
+        <strong>46%</strong>; bin belum memperbaiki foto full-scene. Ini bukan
+        keputusan produksi.
       </div>
     </header>
 
@@ -50,7 +53,7 @@
     <section class="card result" id="result" hidden>
       <div class="result-head">
         <div>
-          <div class="eyebrow">PREDIKSI UTAMA</div>
+          <div class="eyebrow">MODEL MENTAH · FULL-FRAME</div>
           <div class="top-label" id="topLabel">—</div>
         </div>
         <div class="score-badge" id="topScore">—</div>
@@ -64,12 +67,27 @@
       </div>
     </section>
 
+    <section class="card result cal-result" id="calResult" hidden>
+      <div class="result-head">
+        <div>
+          <div class="eyebrow">DENGAN BIN · CROP + VISUAL HINT</div>
+          <div class="top-label" id="calLabel">—</div>
+        </div>
+        <div class="score-badge" id="calScore">—</div>
+      </div>
+
+      <div class="cal-meta" id="calMeta">—</div>
+      <p class="cal-note" id="calNote"></p>
+    </section>
+
     <section class="card notes">
       <h2>Yang perlu diketahui</h2>
       <ul>
         <li>Model yang dipakai adalah <code>cheat-detector.tflite</code> hasil training terbaru.</li>
         <li>Akurasi validation set: <strong>88,43%</strong>, tetapi foto bebas di luar dataset bisa jauh lebih rendah.</li>
-        <li>Demo ini hanya menjalankan <strong>satu inferensi full-frame</strong>. Tidak ada crop, visual hint, atau calibration bin.</li>
+        <li>Kartu pertama adalah <strong>model mentah full-frame</strong>; kartu kedua menjalankan <strong>crop ensemble, visual hint, prototype, dan threshold</strong> dari <code>cheat-detector-calibration.bin</code> (72.520 byte, 1.291 prototipe).</li>
+        <li>Pada 100 foto internet: mentah <strong>58/100</strong>, dengan bin <strong>46/100</strong>. Bin dibuat dari checkpoint float dan tidak membawa visual hint, jadi belum cocok untuk foto internet full-scene.</li>
+        <li>Skor batang adalah <strong>skor mentah full-frame</strong>; keputusan bin bisa berbeda karena memakai crop dan gate kalibrasi.</li>
         <li>Label <code>tidak_dikenali</code> dipakai untuk background/objek yang tidak termasuk empat kelas target.</li>
         <li>Jangan gunakan hasil demo ini sebagai keputusan final dalam ujian sungguhan.</li>
       </ul>
