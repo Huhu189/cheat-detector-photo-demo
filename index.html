@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cheat Detector — Photo Demo</title>
+  <meta name="description" content="Demo upload foto untuk model deteksi objek ujian." />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="eyebrow">PHOTO DEMO · MODEL MENTAH</div>
+      <h1>Cheat Detector</h1>
+      <p class="lede">
+        Upload satu foto. Model akan menebak apakah foto berisi
+        <strong>HP</strong>, <strong>buku</strong>, <strong>layar</strong>,
+        <strong>tulisan tangan</strong>, atau <strong>tidak dikenali</strong>.
+      </p>
+      <div class="notice">
+        Ini demo model saja, bukan pipeline produksi. Frontend asli memakai
+        banyak crop + kalibrasi; hasil di sini bisa berbeda.
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="dropzone" id="dropzone">
+        <input id="fileInput" type="file" accept="image/*" hidden />
+        <div class="drop-icon" aria-hidden="true">＋</div>
+        <p><strong>Pilih foto</strong> atau tarik ke sini</p>
+        <p class="muted">JPG, PNG, WebP · diproses di browser, tidak diunggah ke server</p>
+      </div>
+
+      <div class="preview-wrap" id="previewWrap" hidden>
+        <img id="preview" alt="Pratinjau foto yang dipilih" />
+        <button class="ghost" id="clearButton" type="button">Ganti foto</button>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="analyzeButton" type="button" disabled>
+          Analisis foto
+        </button>
+        <span class="status" id="status" role="status">Menunggu foto…</span>
+      </div>
+
+      <div class="error" id="error" role="alert" hidden></div>
+    </section>
+
+    <section class="card result" id="result" hidden>
+      <div class="result-head">
+        <div>
+          <div class="eyebrow">PREDIKSI UTAMA</div>
+          <div class="top-label" id="topLabel">—</div>
+        </div>
+        <div class="score-badge" id="topScore">—</div>
+      </div>
+
+      <div class="bars" id="bars"></div>
+
+      <div class="meta">
+        <span id="latency">—</span>
+        <span>input 128 × 128 · RGB 0–255</span>
+      </div>
+    </section>
+
+    <section class="card notes">
+      <h2>Yang perlu diketahui</h2>
+      <ul>
+        <li>Model yang dipakai adalah <code>cheat-detector.tflite</code> hasil training terbaru.</li>
+        <li>Akurasi validation set: <strong>88,43%</strong>, tetapi foto bebas di luar dataset bisa jauh lebih rendah.</li>
+        <li>Demo ini hanya menjalankan <strong>satu inferensi full-frame</strong>. Tidak ada crop, visual hint, atau calibration bin.</li>
+        <li>Label <code>tidak_dikenali</code> dipakai untuk background/objek yang tidak termasuk empat kelas target.</li>
+        <li>Jangan gunakan hasil demo ini sebagai keputusan final dalam ujian sungguhan.</li>
+      </ul>
+    </section>
+
+    <footer>
+      <span>Cheat Detector Photo Demo</span>
+      <span id="modelState">Model belum dimuat</span>
+    </footer>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+hp
+buku
+layar
+tulisan_tangan
+tidak_dikenali
